@@ -50,10 +50,20 @@ def poll_task():
     print("Checking paper acceptance status...")
 
     for paper_id in paper_ids:
-        # Get paper status
-        status_id, status_text = cmt.get_acception_status(paper_id)
+        # Get paper status with retries
+        for i in range(3):
+            status_id, status_text = cmt.get_acception_status(paper_id)
 
-        print(f"Paper {paper_id} - Status ID: {status_id}, Status: {status_text}")
+            if status_id is not None:
+                print(f"Paper {paper_id} - Status ID: {status_id}, Status: {status_text}")
+                break  # Exit loop if status is successfully retrieved
+            else:
+                print(f"Attempt {i+1}: Failed to retrieve status for Paper {paper_id}. Reason: {status_text}. Retrying in 10 seconds...")
+                if i < 2:  # No need to wait after the last attempt
+                    time.sleep(10)
+        else:
+            print(f"Paper {paper_id} - Failed to retrieve status after 3 attempts. Last error: {status_text}")
+            continue
 
         # If first check, decide whether to send email based on SEND_ON_STARTUP
         if paper_id not in last_status_ids:
