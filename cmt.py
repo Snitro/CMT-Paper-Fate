@@ -107,35 +107,26 @@ class CMT:
         :param paper_id: The submission ID (e.g., 1352)
         :param retry: Whether to retry the request after re-authentication if 403 occurs.
         :return: Tuple (status_id, status_text)
+        :raises RuntimeError: If authentication fails or request errors occur.
+        :raises ValueError: If response contains unexpected status code.
         """
         acception_status_url = f"{self.base_url}/api/odata/{self.conference}/Submissions/{paper_id}"
 
         try:
             response = self.session.get(acception_status_url, headers=self.headers)
 
-            # If the session is invalid, re-login and retry once
             if response.status_code == 403 and retry:
-                print("Session expired or unauthorized. Re-authenticating...")
-                if self.login():
-                    return self.get_acception_status(paper_id, retry=False)
-                else:
-                    print("Re-authentication failed.")
-                    return None, "Authentication Failed"
+                if not self.login():
+                    raise RuntimeError("Session expired or unauthorized. Re-authentication failed.")
+                return self.get_acception_status(paper_id, retry=False)
 
             if response.status_code == 200:
-                print(f"Successfully retrieved acception status for paper {paper_id}.")
                 data = response.json()
-                
-                # Extract status ID and map it using STATUS_DICT
                 status_id = data.get("StatusId", -1)
-                status_text = self.STATUS_DICT.get(status_id, "Unknown Status")  # Default to "Unknown Status"
-                
+                status_text = self.STATUS_DICT.get(status_id, "Unknown Status")
                 return status_id, status_text
-            else:
-                print(f"Failed to retrieve acception status for paper {paper_id}. Status code:", response.status_code)
-                print("Response:", response.text)
-                return None, "Error fetching status"
-
+            
+            raise ValueError(f"Unexpected response status code {response.status_code}: {response.text}")
+        
         except requests.RequestException as e:
-            print(f"An error occurred while fetching acception status for paper {paper_id}:", e)
-            return None, "Request Error"
+            raise RuntimeError(f"Error fetching acception status for paper {paper_id}: {e}")

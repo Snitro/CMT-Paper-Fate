@@ -1,7 +1,8 @@
-import configparser
 import time
-from cmt import CMT  # Ensure the CMT module is correctly implemented
-from mail import Mail  # Ensure the Mail module is correctly implemented
+import traceback
+import configparser
+from cmt import CMT
+from mail import Mail
 
 # Read the configuration file
 config = configparser.ConfigParser()
@@ -96,6 +97,15 @@ def poll_task():
 
 # Infinite loop to periodically check status
 while True:
-    poll_task()
+    try:
+        poll_task()
+    except Exception as e:
+        error_traceback = traceback.format_exc()
+        print(f"Error occurred:\n{error_traceback}")
+        
+        subject = "⚠️ Error Alert in Polling Task ⚠️"
+        body = f"An error occurred in the polling task:\n\n{error_traceback}"
+        mailer.send_email(subject, body)
+    
     print(f"Sleeping for {polling_interval} seconds...\n")
     time.sleep(polling_interval)
