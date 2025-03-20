@@ -23,6 +23,7 @@ cd CMT-Paper-Fate
 
 ## Configuration ⚙️
 
+### Configure `config.ini`
 Create a configuration file `config.ini` in the root directory and set the required parameters:
 
 ```ini
@@ -51,7 +52,7 @@ SEND_ERROR_EMAIL = True
 - 🔐 **USERNAME and PASSWORD must be stored securely**. Avoid sharing them or committing them to version control.
 - 🔗 **CONFERENCE must be obtained from the CMT3 website**. See the next section for details.
 
-## How to Obtain `CONFERENCE` Value from CMT3 🔍
+### How to Obtain `CONFERENCE` Value from CMT3 🔍
 
 To get the correct **CONFERENCE** value:
 1. Log in to [CMT3](https://cmt3.research.microsoft.com/).
@@ -62,6 +63,26 @@ To get the correct **CONFERENCE** value:
      https://cmt3.research.microsoft.com/MyConference2025/Submission/Index
      ```
      then your **CONFERENCE value is `MyConference2025`**.
+
+### Modify Paper `StatusId` Mapping (Optional) 🔄  
+
+By default, **CMT Paper Fate** uses predefined **StatusId mappings** to display the paper's decision status. You can customize these mappings by modifying the `status_config.json` file in the root directory.
+
+#### Example `status_config.json`
+```json
+{
+    "2": "🎉 Accepted!",
+    "3": "Rejected",
+    ".*": "Pending Decision"
+}
+```
+
+#### Explanation:
+- The **key** represents a **regular expression** used to match the `StatusId` from CMT.
+- The **value** is the corresponding **status message** that will be displayed.
+- **The first entry in the mapping should correspond to an "Accepted" status.**  
+- **The second entry should correspond to a "Rejected" status.**  
+- Any other statuses can be added afterward, using `".*"` as a wildcard to match all remaining cases.
 
 ## Usage 🚀
 
