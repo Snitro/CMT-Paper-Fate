@@ -4,9 +4,9 @@ import configparser
 from cmt import CMT
 from mail import Mail
 
-# Read the configuration file
+# Read configuration
 config = configparser.ConfigParser()
-config.read("config.ini")  # Your configuration file name
+config.read("config.ini")
 
 # Parse EMAIL section
 smtp_server = config.get("EMAIL", "SMTP_SERVER")
@@ -23,7 +23,10 @@ paper_ids = [paper.strip() for paper in config.get("CMT", "PAPER_ID").split(",")
 
 # Parse SETTINGS section
 polling_interval = config.getint("SETTINGS", "POLLING_INTERVAL")
+max_retries = config.getint("SETTINGS", "MAX_RETRIES", fallback=3)
+retry_interval = config.getint("SETTINGS", "RETRY_INTERVAL", fallback=5)
 send_on_startup = config.getboolean("SETTINGS", "SEND_ON_STARTUP")
+send_error_email = config.getboolean("SETTINGS", "SEND_ERROR_EMAIL", fallback=True)
 
 # Status dictionary
 STATUS_DICT = {
@@ -44,29 +47,31 @@ mailer = Mail(
     smtp_server=smtp_server
 )
 
-# Function to check paper acceptance status and send email notifications
 def poll_task():
     global last_status_ids
-
     print("Checking paper acceptance status...")
-
+    
     for paper_id in paper_ids:
-        # Get paper status with retries
-        for i in range(3):
-            status_id, status_text = cmt.get_acception_status(paper_id)
-
-            if status_id is not None:
-                print(f"Paper {paper_id} - Status ID: {status_id}, Status: {status_text}")
-                break  # Exit loop if status is successfully retrieved
-            else:
-                print(f"Attempt {i+1}: Failed to retrieve status for Paper {paper_id}. Reason: {status_text}. Retrying in 10 seconds...")
-                if i < 2:  # No need to wait after the last attempt
-                    time.sleep(10)
+        error_messages = []
+        for attempt in range(max_retries):
+            try:
+                status_id, status_text = cmt.get_acception_status(paper_id)
+                if status_id is not None:
+                    print(f"Paper {paper_id} - Status ID: {status_id}, Status: {status_text}")
+                    break  # Exit retry loop if successful
+            except Exception as e:
+                error_traceback = traceback.format_exc()
+                error_messages.append(f"Attempt {attempt + 1}:\n{error_traceback}")
+                print(f"Error occurred (attempt {attempt + 1}):\n{error_traceback}")
+                time.sleep(retry_interval)
         else:
-            print(f"Paper {paper_id} - Failed to retrieve status after 3 attempts. Last error: {status_text}")
+            print(f"Paper {paper_id} - Failed to retrieve status after {max_retries} attempts.")
+            if send_error_email:
+                subject = "⚠️ Persistent Error in Polling Task ⚠️"
+                body = "Multiple errors occurred in the polling task:\n\n" + "\n\n".join(error_messages)
+                mailer.send_email(subject, body)
             continue
-
-        # If first check, decide whether to send email based on SEND_ON_STARTUP
+        
         if paper_id not in last_status_ids:
             last_status_ids[paper_id] = status_id
             if not send_on_startup:
@@ -75,21 +80,19 @@ def poll_task():
             else:
                 last_status_ids[paper_id] = -1
 
-        # If the status has changed, send an email notification
         if status_id != last_status_ids[paper_id]:
             last_status_ids[paper_id] = status_id  # Update last known status
-
-            if status_id == 2:  # Accepted
+            subject, body = "", ""
+            if status_id == 2:
                 subject = "🎉 Paper Acceptance Notification!"
                 body = f"Congratulations! Your paper (ID: {paper_id}) has been accepted to {cmt_conference}."
-            elif status_id == 3:  # Rejected
+            elif status_id == 3:
                 subject = "ℹ️ Paper Status Update"
                 body = f"Your paper (ID: {paper_id}) has been rejected for {cmt_conference}."
             else:
                 subject = "ℹ️ Paper Status Update"
                 body = f"Your paper (ID: {paper_id}) status has been updated: {STATUS_DICT.get(status_id, 'Unknown Status')}. Please check the conference system for details."
-
-            # Send email notification
+            
             print(f"Sending email notification for Paper {paper_id}: {subject}")
             mailer.send_email(subject, body)
         else:
@@ -102,10 +105,10 @@ while True:
     except Exception as e:
         error_traceback = traceback.format_exc()
         print(f"Error occurred:\n{error_traceback}")
-        
-        subject = "⚠️ Error Alert in Polling Task ⚠️"
-        body = f"An error occurred in the polling task:\n\n{error_traceback}"
-        mailer.send_email(subject, body)
+        if send_error_email:
+            subject = "⚠️ Error Alert in Polling Task ⚠️"
+            body = f"An error occurred in the polling task:\n\n{error_traceback}"
+            mailer.send_email(subject, body)
     
     print(f"Sleeping for {polling_interval} seconds...\n")
     time.sleep(polling_interval)
